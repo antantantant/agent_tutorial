@@ -6,7 +6,7 @@ with OpenRouter(
 ) as client:
     messages = []
     while True:
-        user_input = input("\n/T: ")
+        user_input = input("\nUser: ")
         messages.append({"role": "user", "content": user_input})
         response = client.chat.send(
             model="anthropic/claude-opus-4.6",

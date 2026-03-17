@@ -5,7 +5,7 @@ with OpenRouter(
     api_key=os.getenv("OPENROUTER_API_KEY")
 ) as client:
     while True:
-        user_input = input("\n/T: ")
+        user_input = input("\nUser: ")
         response = client.chat.send(
             model="anthropic/claude-opus-4.6",
             messages=[

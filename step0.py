@@ -5,7 +5,7 @@ with OpenRouter(
     api_key=os.getenv("OPENROUTER_API_KEY")
 ) as client:
     response = client.chat.send(
-        model="ifnimax/minimax-m2",
+        model="minimax/minimax-m2",
         messages=[
             {"role": "user", "content": "Hello!"}
         ]
