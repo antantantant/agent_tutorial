@@ -1,5 +1,54 @@
 import os
+import subprocess
+import xml.etree.ElementTree as ET
 from openrouter import OpenRouter
+
+
+def format_command_output(output: str) -> str:
+    text = output.strip()
+    if "<rss" not in text and "<feed" not in text:
+        return text[:4000]
+
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return text[:4000]
+
+    items = []
+
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        if title and link:
+            items.append(f"- {title} | {link}")
+        if len(items) == 5:
+            return "\n".join(items)
+
+    for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
+        title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
+        link = ""
+        for node in entry.findall("{http://www.w3.org/2005/Atom}link"):
+            href = node.attrib.get("href", "").strip()
+            if href:
+                link = href
+                break
+        if title and link:
+            items.append(f"- {title} | {link}")
+        if len(items) == 5:
+            break
+
+    return "\n".join(items) if items else text[:4000]
+
+
+def get_directive(reply: str) -> tuple[str | None, str]:
+    for line in reply.splitlines():
+        line = line.strip()
+        if line.startswith("COMMAND:"):
+            return "COMMAND", line.split("COMMAND:", 1)[1].strip()
+        if line.startswith("DONE:"):
+            return "DONE", line.split("DONE:", 1)[1].strip()
+    return None, ""
+
 
 # Initialize the client
 api_key = os.getenv("OPENROUTER_API_KEY")
@@ -7,7 +56,7 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 with OpenRouter(api_key=api_key) as client:
     # Safely load system and skill files
     try:
-        with open("Agent.md", "r", encoding="utf-8") as f:
+        with open("AGENT.md", "r", encoding="utf-8") as f:
             agent_md = f.read()
         with open("SKILL.md", "r", encoding="utf-8") as f:
             skill_md = f.read()
@@ -34,23 +83,23 @@ with OpenRouter(api_key=api_key) as client:
             
             reply = response.choices[0].message.content.strip()
             messages.append({"role": "assistant", "content": reply})
+            directive, payload = get_directive(reply)
             
             # Print AI response in Green
             print(f"\033[32m[AI] {reply}\033[0m\n")
 
-            # Check if the agent is finished (using 'DONE:' as the trigger)
-            if reply.startswith("DONE:"):
+            if directive == "DONE":
                 break
             
-            # If the agent wants to execute a command (using 'COMMAND:' as the trigger)
-            if "COMMAND:" in reply:
+            if directive == "COMMAND":
                 try:
-                    # Extract command string after the trigger
-                    command = reply.split("COMMAND:")[1].strip()
-                    
-                    # Execute and capture output
-                    with os.popen(command) as pipe:
-                        command_result = pipe.read()
+                    result = subprocess.run(
+                        payload,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    command_result = format_command_output(result.stdout)
                     
                     feedback = f"Execution finished. Output:\n{command_result}"
                     print(f"[Agent] {feedback}")
@@ -61,5 +110,4 @@ with OpenRouter(api_key=api_key) as client:
                     error_feedback = f"Execution failed: {str(e)}"
                     messages.append({"role": "user", "content": error_feedback})
             else:
-                # If no command or done signal is found, break to prevent infinite loops
                 break
