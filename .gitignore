@@ -2,3 +2,4 @@
 __pycache__/
 openrouter.md
 .venv/
+GoogleCalendarCredential.json
